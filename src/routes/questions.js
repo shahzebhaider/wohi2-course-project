@@ -4,11 +4,11 @@ const router = express.Router();
 
 const questions = require('../data/questions');
 
-/* ================================
-   STEP 4 + 5: GET all / search
-================================ */
 
-// GET /api/questions
+  // this is GET all / search
+
+
+
 router.get('/', (req, res) => {
   const { keyword } = req.query;
 
@@ -23,9 +23,9 @@ router.get('/', (req, res) => {
   res.json(filtered);
 });
 
-/* ================================
-   STEP 6: GET by ID
-================================ */
+
+ // this one is for GET by ID
+
 
 router.get('/:id', (req, res) => {
   const id = Number(req.params.id);
@@ -38,9 +38,9 @@ router.get('/:id', (req, res) => {
   res.json(question);
 });
 
-/* ================================
-   STEP 7: POST new question
-================================ */
+
+  //this is for   POST new question
+
 
 router.post('/', (req, res) => {
   const { question, answer, keywords } = req.body;
@@ -64,9 +64,9 @@ router.post('/', (req, res) => {
   res.status(201).json(newQuestion);
 });
 
-/* ================================
-   STEP 8: PUT update question
-================================ */
+
+   // this is for  PUT update question
+
 
 router.put('/:id', (req, res) => {
   const id = Number(req.params.id);
@@ -91,9 +91,9 @@ router.put('/:id', (req, res) => {
   res.json(existing);
 });
 
-/* ================================
-   STEP 9: DELETE question
-================================ */
+
+   // this is for  DELETE question
+
 
 router.delete('/:id', (req, res) => {
   const id = Number(req.params.id);
@@ -111,8 +111,7 @@ router.delete('/:id', (req, res) => {
   });
 });
 
-/* ================================
-   EXPORT ROUTER
-================================ */
+   //EXPORT ROUTER
+
 
 module.exports = router;
