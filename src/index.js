@@ -1,22 +1,23 @@
 const express = require('express');
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
-// Middleware to parse JSON
+// Middleware
 app.use(express.json());
 
+// Import router
+const questionsRouter = require('./routes/questions');
 
-// Hello World route
-app.get('/', (req, res) => {
-  res.json({ message: 'Hello, World!' });
+// API routes
+app.use('/api/questions', questionsRouter);
+
+// 404 fallback
+app.use((req, res) => {
+  res.status(404).json({ message: 'Not found' });
 });
 
-// Health check route
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Start the server
+// Start server
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
