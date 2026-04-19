@@ -1,117 +1,163 @@
-
-const express = require('express');
+const express = require("express");
 const router = express.Router();
+const prisma = require("../lib/prisma");
 
-const questions = require('../data/questions');
-
-
-  // this is GET all / search
-
-
-
-router.get('/', (req, res) => {
-  const { keyword } = req.query;
-
-  if (!keyword) {
-    return res.json(questions);
-  }
-
-  const filtered = questions.filter(q =>
-    q.keywords.includes(keyword.toLowerCase())
-  );
-
-  res.json(filtered);
-});
-
-
- // this one is for GET by ID
-
-
-router.get('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const question = questions.find(q => q.id === id);
-
-  if (!question) {
-    return res.status(404).json({ message: "Question not found" });
-  }
-
-  res.json(question);
-});
-
-
-  //this is for   POST new question
-
-
-router.post('/', (req, res) => {
-  const { question, answer, keywords } = req.body;
-
-  if (!question || !answer) {
-    return res.status(400).json({
-      message: "question and answer are required"
-    });
-  }
-
-  const maxId = Math.max(...questions.map(q => q.id), 0);
-
-  const newQuestion = {
-    id: maxId + 1,
-    question,
-    answer,
-    keywords: Array.isArray(keywords) ? keywords : []
+function formatQuestion(question) {
+  return {
+    ...question,
+    keywords: question.keywords.map((k) => k.name)
   };
+}
 
-  questions.push(newQuestion);
-  res.status(201).json(newQuestion);
-});
+// GET all questions
+router.get("/", async (req, res) => {
+  try {
+    const { keyword } = req.query;
 
+    const where = keyword
+      ? {
+          keywords: {
+            some: {
+              name: keyword
+            }
+          }
+        }
+      : {};
 
-   // this is for  PUT update question
-
-
-router.put('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const { question, answer, keywords } = req.body;
-
-  const existing = questions.find(q => q.id === id);
-
-  if (!existing) {
-    return res.status(404).json({ message: "Question not found" });
-  }
-
-  if (!question || !answer) {
-    return res.status(400).json({
-      message: "question and answer are required"
+    const questions = await prisma.question.findMany({
+      where,
+      include: { keywords: true },
+      orderBy: { id: "asc" }
     });
+
+    res.json(questions.map(formatQuestion));
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error" });
   }
-
-  existing.question = question;
-  existing.answer = answer;
-  existing.keywords = Array.isArray(keywords) ? keywords : [];
-
-  res.json(existing);
 });
 
+// GET one question by id
+router.get("/:qId", async (req, res) => {
+  try {
+    const qId = Number(req.params.qId);
 
-   // this is for  DELETE question
+    const question = await prisma.question.findUnique({
+      where: { id: qId },
+      include: { keywords: true }
+    });
 
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
 
-router.delete('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const index = questions.findIndex(q => q.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ message: "Question not found" });
+    res.json(formatQuestion(question));
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error" });
   }
-
-  const deleted = questions.splice(index, 1);
-
-  res.json({
-    message: "Question deleted successfully",
-    question: deleted[0]
-  });
 });
 
-   //EXPORT ROUTER
+// POST create new question
+router.post("/", async (req, res) => {
+  try {
+    const { question, answer, keywords } = req.body;
 
+    if (!question || !answer) {
+      return res.status(400).json({
+        message: "question and answer are mandatory"
+      });
+    }
+
+    const keywordsArray = Array.isArray(keywords) ? keywords : [];
+
+    const newQuestion = await prisma.question.create({
+      data: {
+        question,
+        answer,
+        keywords: {
+          connectOrCreate: keywordsArray.map((kw) => ({
+            where: { name: kw },
+            create: { name: kw }
+          }))
+        }
+      },
+      include: { keywords: true }
+    });
+
+    res.status(201).json(formatQuestion(newQuestion));
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// PUT update question
+router.put("/:qId", async (req, res) => {
+  try {
+    const qId = Number(req.params.qId);
+    const { question, answer, keywords } = req.body;
+
+    const existingQuestion = await prisma.question.findUnique({
+      where: { id: qId }
+    });
+
+    if (!existingQuestion) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    if (!question || !answer) {
+      return res.status(400).json({
+        message: "question and answer are mandatory"
+      });
+    }
+
+    const keywordsArray = Array.isArray(keywords) ? keywords : [];
+
+    const updatedQuestion = await prisma.question.update({
+      where: { id: qId },
+      data: {
+        question,
+        answer,
+        keywords: {
+          set: [],
+          connectOrCreate: keywordsArray.map((kw) => ({
+            where: { name: kw },
+            create: { name: kw }
+          }))
+        }
+      },
+      include: { keywords: true }
+    });
+
+    res.json(formatQuestion(updatedQuestion));
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// DELETE question
+router.delete("/:qId", async (req, res) => {
+  try {
+    const qId = Number(req.params.qId);
+
+    const question = await prisma.question.findUnique({
+      where: { id: qId },
+      include: { keywords: true }
+    });
+
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    await prisma.question.delete({
+      where: { id: qId }
+    });
+
+    res.json({
+      message: "Question deleted successfully",
+      question: formatQuestion(question)
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 module.exports = router;
