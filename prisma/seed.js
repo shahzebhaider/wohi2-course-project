@@ -1,3 +1,4 @@
+const bcrypt = require("bcrypt");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
@@ -39,6 +40,16 @@ async function main() {
   }
 
   console.log("Seed data inserted successfully");
+
+const hashedPassword = await bcrypt.hash("1234", 10);
+const user = await prisma.user.create({
+  data: {
+    email: "admin@example.com",
+    password: hashedPassword,
+    name: "Admin User",
+  },
+});
+
 }
 
 main()
@@ -49,3 +60,11 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+  model Question {
+  id      Int     @id @default(autoincrement())
+  title   String
+  content String
+
+  userId  Int
+  user    User @relation(fields: [userId], references: [id])
+}
