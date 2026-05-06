@@ -3,29 +3,42 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quiz App</title>
+
+  <title>Wohii Quiz</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
-  <header class="hero">
-    <div>
-      <p class="badge">Quiz Project</p>
-      <h1>Interactive Quiz Questions</h1>
-      <p class="subtitle">Check questions, solved status, attempts, keywords and images.</p>
-    </div>
+  <header>
+    <h1>WOHII QUIZ</h1>
+
+    <button id="logout-btn">
+      Log out
+    </button>
   </header>
 
-  <main class="container">
-    <div class="top-bar">
-      <h2>Question List</h2>
-      <span id="summary">Loading...</span>
-    </div>
+  <main>
 
-    <div id="questions" class="grid"></div>
+    <section id="auth-section" style="display: none"></section>
+
+    <section id="app-section" style="display: none">
+      <div id="questions-container"></div>
+    </section>
+
   </main>
 
   <script src="config.js"></script>
   <script src="app.js"></script>
+
 </body>
 </html>
