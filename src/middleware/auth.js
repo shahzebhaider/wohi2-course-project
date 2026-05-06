@@ -1,7 +1,5 @@
 const jwt = require("jsonwebtoken");
 
-const SECRET = process.env.JWT_SECRET;
-
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
 
@@ -12,13 +10,17 @@ function authenticate(req, res, next) {
   const token = authHeader.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(token, SECRET);
-    req.user = decoded;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    req.user = {
+      userId: decoded.userId || decoded.id,
+      email: decoded.email,
+    };
+
     next();
   } catch {
     return res.status(403).json({ error: "Invalid token" });
   }
 }
-console.log("SECRET:", SECRET);
 
 module.exports = authenticate;

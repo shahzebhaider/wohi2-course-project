@@ -14,17 +14,20 @@ model User {
   name     String
 
   questions Question[]
+  attempts  Attempt[]
 }
 
 model Question {
-  id       Int    @id @default(autoincrement())
+  id       Int     @id @default(autoincrement())
   question String
   answer   String
+  imageUrl String? @db.VarChar(255)
 
   userId Int
   user   User @relation(fields: [userId], references: [id])
 
   keywords Keyword[]
+  attempts Attempt[]
 }
 
 model Keyword {
@@ -32,4 +35,19 @@ model Keyword {
   name String @unique
 
   questions Question[]
+}
+
+model Attempt {
+  id              Int      @id @default(autoincrement())
+  createdAt       DateTime @default(now())
+  userId          Int
+  questionId      Int
+  submittedAnswer String   @db.VarChar(255)
+  correctAnswer   String   @db.VarChar(255)
+  correct         Boolean
+
+  user     User     @relation(fields: [userId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@map("attempts")
 }
