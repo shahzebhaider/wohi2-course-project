@@ -4,11 +4,27 @@ const isOwner = require("../middleware/isOwner");
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
+const { z } = require("zod");
 
 const router = express.Router();
 const prisma = require("../lib/prisma");
 
+const {
+  ValidationError,
+  NotFoundError,
+} = require("../lib/errors");
+
 router.use(authenticate);
+
+const QuestionInput = z.object({
+  question: z.string().min(1),
+  answer: z.string().min(1),
+  keywords: z.union([z.string(), z.array(z.string())]).optional(),
+});
+
+const PlayInput = z.object({
+  answer: z.string().min(1),
+});
 
 const storage = multer.diskStorage({
   destination: path.join(__dirname, "..", "..", "public", "uploads"),
@@ -21,8 +37,11 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) cb(null, true);
-    else cb(new Error("Only image files are allowed"));
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new ValidationError("Only image files are allowed"));
+    }
   },
   limits: {
     fileSize: 5 * 1024 * 1024,
@@ -55,8 +74,8 @@ function formatQuestion(question) {
   };
 }
 
-
-router.get("/", async (req, res) => {
+// GET all questions
+router.get("/", async (req, res, next) => {
   try {
     const { keyword } = req.query;
 
@@ -112,20 +131,15 @@ router.get("/", async (req, res) => {
       totalPages: Math.ceil(total / limit),
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
 });
 
-
-router.post("/:qId/play", async (req, res) => {
+// PLAY question
+router.post("/:qId/play", async (req, res, next) => {
   try {
     const qId = Number(req.params.qId);
-    const { answer } = req.body;
-
-    if (!answer) {
-      return res.status(400).json({ message: "Answer is required" });
-    }
+    const data = PlayInput.parse(req.body);
 
     const question = await prisma.question.findUnique({
       where: {
@@ -134,17 +148,18 @@ router.post("/:qId/play", async (req, res) => {
     });
 
     if (!question) {
-      return res.status(404).json({ message: "Question not found" });
+      req.log.warn({ qId }, "user tried to play nonexistent question");
+      throw new NotFoundError("Question not found");
     }
 
     const correct =
-      answer.trim().toLowerCase() === question.answer.trim().toLowerCase();
+      data.answer.trim().toLowerCase() === question.answer.trim().toLowerCase();
 
     const attempt = await prisma.attempt.create({
       data: {
         userId: req.user.userId,
         questionId: qId,
-        submittedAnswer: answer,
+        submittedAnswer: data.answer,
         correctAnswer: question.answer,
         correct,
       },
@@ -158,13 +173,12 @@ router.post("/:qId/play", async (req, res) => {
       createdAt: attempt.createdAt,
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
 });
 
-
-router.get("/:qId", async (req, res) => {
+// GET one question
+router.get("/:qId", async (req, res, next) => {
   try {
     const qId = Number(req.params.qId);
 
@@ -190,34 +204,28 @@ router.get("/:qId", async (req, res) => {
     });
 
     if (!question) {
-      return res.status(404).json({ message: "Question not found" });
+      req.log.warn({ qId }, "user tried to access nonexistent question");
+      throw new NotFoundError("Question not found");
     }
 
     res.json(formatQuestion(question));
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
 });
 
-
-router.post("/", upload.single("image"), async (req, res) => {
+// CREATE question
+router.post("/", upload.single("image"), async (req, res, next) => {
   try {
-    const { question, answer } = req.body;
-    const keywordsArray = parseKeywords(req.body.keywords);
-
-    if (!question || !answer) {
-      return res.status(400).json({
-        message: "question and answer are mandatory",
-      });
-    }
+    const data = QuestionInput.parse(req.body);
+    const keywordsArray = parseKeywords(data.keywords);
 
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
     const newQuestion = await prisma.question.create({
       data: {
-        question,
-        answer,
+        question: data.question,
+        answer: data.answer,
         imageUrl,
         userId: req.user.userId,
         keywords: {
@@ -245,27 +253,20 @@ router.post("/", upload.single("image"), async (req, res) => {
 
     res.status(201).json(formatQuestion(newQuestion));
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
 });
 
-
-router.put("/:qId", upload.single("image"), isOwner, async (req, res) => {
+// UPDATE question
+router.put("/:qId", upload.single("image"), isOwner, async (req, res, next) => {
   try {
     const qId = Number(req.params.qId);
-    const { question, answer } = req.body;
-    const keywordsArray = parseKeywords(req.body.keywords);
+    const data = QuestionInput.parse(req.body);
+    const keywordsArray = parseKeywords(data.keywords);
 
-    if (!question || !answer) {
-      return res.status(400).json({
-        message: "question and answer are mandatory",
-      });
-    }
-
-    const data = {
-      question,
-      answer,
+    const updateData = {
+      question: data.question,
+      answer: data.answer,
       keywords: {
         set: [],
         connectOrCreate: keywordsArray.map((kw) => ({
@@ -280,14 +281,14 @@ router.put("/:qId", upload.single("image"), isOwner, async (req, res) => {
     };
 
     if (req.file) {
-      data.imageUrl = `/uploads/${req.file.filename}`;
+      updateData.imageUrl = `/uploads/${req.file.filename}`;
     }
 
     const updatedQuestion = await prisma.question.update({
       where: {
         id: qId,
       },
-      data,
+      data: updateData,
       include: {
         keywords: true,
         user: true,
@@ -302,13 +303,12 @@ router.put("/:qId", upload.single("image"), isOwner, async (req, res) => {
 
     res.json(formatQuestion(updatedQuestion));
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
 });
 
-
-router.delete("/:qId", isOwner, async (req, res) => {
+// DELETE question
+router.delete("/:qId", isOwner, async (req, res, next) => {
   try {
     const qId = Number(req.params.qId);
 
@@ -322,7 +322,7 @@ router.delete("/:qId", isOwner, async (req, res) => {
     });
 
     if (!question) {
-      return res.status(404).json({ message: "Question not found" });
+      throw new NotFoundError("Question not found");
     }
 
     await prisma.question.delete({
@@ -336,23 +336,11 @@ router.delete("/:qId", isOwner, async (req, res) => {
       question: formatQuestion(question),
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Internal server error" });
+    next(error);
   }
-});
-
-router.use((err, req, res, next) => {
-  if (
-    err instanceof multer.MulterError ||
-    err?.message === "Only image files are allowed"
-  ) {
-    return res.status(400).json({
-      message: err.message,
-    });
-  }
-
-  next(err);
 });
 
 module.exports = router;
+
+
 
